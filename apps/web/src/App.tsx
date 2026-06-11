@@ -1,5 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Route, Routes, useNavigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './useAuth';
+import { LoginPage } from './LoginPage';
 
 type PackageStatus = 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
 
@@ -24,41 +26,91 @@ const initialPackages: PackageItem[] = [
 ];
 
 export function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
+  );
+}
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
   const [packages, setPackages] = useState<PackageItem[]>(initialPackages);
+
+  if (loading) {
+    return (
+      <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <p>Loading...</p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   return (
     <Routes>
       <Route path="/" element={<ListPage packages={packages} />} />
-      <Route path="/add" element={<AddPage onAdd={(pkg) => setPackages(p => [pkg, ...p])} />} />
+      <Route path="/add" element={<AddPage onAdd={(pkg) => setPackages((p) => [pkg, ...p])} />} />
     </Routes>
   );
 }
 
 function ListPage({ packages }: { packages: PackageItem[] }) {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: 1000, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h1 style={{ margin: 0 }}>Package Tracker</h1>
-          <p style={{ margin: '0.5rem 0 0', color: '#666' }}>Track all your deliveries</p>
+          <p style={{ margin: '0.5rem 0 0', color: '#666' }}>Welcome, {user?.displayName || user?.email}</p>
         </div>
-        <button 
-          onClick={() => navigate('/add')}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            background: '#0066cc',
-            color: 'white',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontWeight: 600
-          }}
-        >
-          + Add package
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button
+            onClick={() => navigate('/add')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              fontSize: '1rem',
+              background: '#0066cc',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            + Add package
+          </button>
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            style={{
+              padding: '0.75rem 1rem',
+              fontSize: '0.9rem',
+              background: '#f0f0f0',
+              color: '#333',
+              border: 'none',
+              borderRadius: 6,
+              cursor: signingOut ? 'not-allowed' : 'pointer',
+              opacity: signingOut ? 0.6 : 1,
+            }}
+          >
+            {signingOut ? 'Signing out...' : 'Sign out'}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gap: '1rem' }}>
@@ -76,10 +128,10 @@ function ListPage({ packages }: { packages: PackageItem[] }) {
                 padding: '1.25rem',
                 background: '#fff',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                transition: 'box-shadow 0.2s'
+                transition: 'box-shadow 0.2s',
               }}
-              onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)'}
-              onMouseOut={(e) => e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'}
+              onMouseOver={(e) => (e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)')}
+              onMouseOut={(e) => (e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)')}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '1rem' }}>
                 <div style={{ flex: 1 }}>
@@ -89,15 +141,17 @@ function ListPage({ packages }: { packages: PackageItem[] }) {
                     {item.trackingNumber && <div>🔗 Tracking: {item.trackingNumber}</div>}
                   </div>
                 </div>
-                <div style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: 6,
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  background: getStatusColor(item.status),
-                  color: '#fff',
-                  whiteSpace: 'nowrap'
-                }}>
+                <div
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: 6,
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    background: getStatusColor(item.status),
+                    color: '#fff',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {item.status.replaceAll('_', ' ')}
                 </div>
               </div>
@@ -126,7 +180,7 @@ function AddPage({ onAdd }: { onAdd: (pkg: PackageItem) => void }) {
       status: 'PENDING',
       source: 'MANUAL',
     };
-    
+
     onAdd(pkg);
     navigate('/');
   };
@@ -134,7 +188,7 @@ function AddPage({ onAdd }: { onAdd: (pkg: PackageItem) => void }) {
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: 600, margin: '0 auto' }}>
       <h1>Add a new package</h1>
-      <p style={{ color: '#666' }}>Describe what you're expecting. You can add details later.</p>
+      <p style={{ color: '#666' }}>Describe what you''re expecting. You can add details later.</p>
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
         <textarea
@@ -152,7 +206,7 @@ function AddPage({ onAdd }: { onAdd: (pkg: PackageItem) => void }) {
             borderRadius: 8,
             fontFamily: 'inherit',
             resize: 'vertical',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
           }}
         />
 
@@ -168,7 +222,7 @@ function AddPage({ onAdd }: { onAdd: (pkg: PackageItem) => void }) {
               border: 'none',
               borderRadius: 6,
               cursor: 'pointer',
-              fontWeight: 600
+              fontWeight: 600,
             }}
           >
             Save package
@@ -184,7 +238,7 @@ function AddPage({ onAdd }: { onAdd: (pkg: PackageItem) => void }) {
               color: '#333',
               border: 'none',
               borderRadius: 6,
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             Cancel
