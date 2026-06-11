@@ -1,7 +1,8 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { Route, Routes, useNavigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './useAuth';
+import { FormEvent, useState } from 'react';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { isDemoAuthMode } from './firebase';
 import { LoginPage } from './LoginPage';
+import { AuthProvider, useAuth } from './useAuth';
 
 type PackageStatus = 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
 
@@ -52,7 +53,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<ListPage packages={packages} />} />
-      <Route path="/add" element={<AddPage onAdd={(pkg) => setPackages((p) => [pkg, ...p])} />} />
+      <Route path="/add" element={<AddPage onAdd={(pkg) => setPackages((current) => [pkg, ...current])} />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
@@ -94,22 +96,24 @@ function ListPage({ packages }: { packages: PackageItem[] }) {
           >
             + Add package
           </button>
-          <button
-            onClick={handleSignOut}
-            disabled={signingOut}
-            style={{
-              padding: '0.75rem 1rem',
-              fontSize: '0.9rem',
-              background: '#f0f0f0',
-              color: '#333',
-              border: 'none',
-              borderRadius: 6,
-              cursor: signingOut ? 'not-allowed' : 'pointer',
-              opacity: signingOut ? 0.6 : 1,
-            }}
-          >
-            {signingOut ? 'Signing out...' : 'Sign out'}
-          </button>
+          {!isDemoAuthMode ? (
+            <button
+              onClick={handleSignOut}
+              disabled={signingOut}
+              style={{
+                padding: '0.75rem 1rem',
+                fontSize: '0.9rem',
+                background: '#f0f0f0',
+                color: '#333',
+                border: 'none',
+                borderRadius: 6,
+                cursor: signingOut ? 'not-allowed' : 'pointer',
+                opacity: signingOut ? 0.6 : 1,
+              }}
+            >
+              {signingOut ? 'Signing out...' : 'Sign out'}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -130,15 +134,19 @@ function ListPage({ packages }: { packages: PackageItem[] }) {
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 transition: 'box-shadow 0.2s',
               }}
-              onMouseOver={(e) => (e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)')}
-              onMouseOut={(e) => (e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)')}
+              onMouseOver={(event) => {
+                event.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+              }}
+              onMouseOut={(event) => {
+                event.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+              }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '1rem' }}>
                 <div style={{ flex: 1 }}>
                   <strong style={{ fontSize: '1.1rem', display: 'block', marginBottom: '0.5rem' }}>{item.title}</strong>
                   <div style={{ fontSize: '0.9rem', color: '#666', lineHeight: 1.6 }}>
-                    {item.carrier && <div>📦 Carrier: {item.carrier}</div>}
-                    {item.trackingNumber && <div>🔗 Tracking: {item.trackingNumber}</div>}
+                    {item.carrier ? <div>Carrier: {item.carrier}</div> : null}
+                    {item.trackingNumber ? <div>Tracking: {item.trackingNumber}</div> : null}
                   </div>
                 </div>
                 <div
@@ -167,33 +175,33 @@ function AddPage({ onAdd }: { onAdd: (pkg: PackageItem) => void }) {
   const navigate = useNavigate();
   const [text, setText] = useState('');
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     const cleanText = text.trim();
-    if (!cleanText) return;
+    if (!cleanText) {
+      return;
+    }
 
-    const pkg: PackageItem = {
+    onAdd({
       id: `pkg-${Date.now()}`,
       title: cleanText,
       trackingNumber: '',
       carrier: '',
       status: 'PENDING',
       source: 'MANUAL',
-    };
-
-    onAdd(pkg);
+    });
     navigate('/');
   };
 
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: 600, margin: '0 auto' }}>
       <h1>Add a new package</h1>
-      <p style={{ color: '#666' }}>Describe what you''re expecting. You can add details later.</p>
+      <p style={{ color: '#666' }}>Describe what you're expecting. You can add details later.</p>
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(event) => setText(event.target.value)}
           placeholder="E.g., MacBook Pro from Amazon, DHL express..."
           autoFocus
           required
@@ -256,5 +264,6 @@ function getStatusColor(status: PackageStatus): string {
     OUT_FOR_DELIVERY: '#ff9800',
     DELIVERED: '#4caf50',
   };
+
   return colors[status];
 }

@@ -1,15 +1,20 @@
 import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
-import { auth } from './firebase';
 import {
-  signInWithPopup,
-  GoogleAuthProvider,
   FacebookAuthProvider,
+  GoogleAuthProvider,
+  signInWithPopup,
   signOut as firebaseSignOut,
-  User,
 } from 'firebase/auth';
+import { auth, isDemoAuthMode } from './firebase';
+
+export interface AuthenticatedUser {
+  displayName: string | null;
+  email: string | null;
+  provider: 'demo' | 'firebase';
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthenticatedUser | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithFacebook: () => Promise<void>;
@@ -18,45 +23,72 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const demoUser: AuthenticatedUser = {
+  displayName: 'Demo User',
+  email: 'demo@package-tracker.local',
+  provider: 'demo',
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isDemoAuthMode || !auth) {
+      setUser(demoUser);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
+      setUser(
+        currentUser
+          ? {
+              displayName: currentUser.displayName,
+              email: currentUser.email,
+              provider: 'firebase',
+            }
+          : null,
+      );
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Google sign-in error:', error);
-      throw error;
+    if (isDemoAuthMode) {
+      setUser(demoUser);
+      return;
     }
+    if (!auth) {
+      throw new Error('Firebase auth is not initialized.');
+    }
+
+    await signInWithPopup(auth, new GoogleAuthProvider());
   };
 
   const signInWithFacebook = async () => {
-    const provider = new FacebookAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Facebook sign-in error:', error);
-      throw error;
+    if (isDemoAuthMode) {
+      setUser(demoUser);
+      return;
     }
+    if (!auth) {
+      throw new Error('Firebase auth is not initialized.');
+    }
+
+    await signInWithPopup(auth, new FacebookAuthProvider());
   };
 
   const signOut = async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch (error) {
-      console.error('Sign-out error:', error);
-      throw error;
+    if (isDemoAuthMode) {
+      return;
     }
+    if (!auth) {
+      throw new Error('Firebase auth is not initialized.');
+    }
+
+    await firebaseSignOut(auth);
   };
 
   return (

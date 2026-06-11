@@ -65,11 +65,8 @@ resource appPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${prefix}-plan'
   location: location
   sku: {
-    name: 'B1'
-    tier: 'Basic'
-  }
-  properties: {
-    reserved: true
+    name: 'F1'
+    tier: 'Free'
   }
 }
 
@@ -83,7 +80,6 @@ resource api 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: appPlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'NODE|20-lts'
       appSettings: [
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
